@@ -2,7 +2,11 @@
 <html lang="zh-HK">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+
   <title>估估畫畫 · 香港版 | 派對體感猜詞遊戲</title>
   <script src="https://cdn.tailwindcss.com/3.4.17"></script>
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -17,11 +21,13 @@
     }
 
     body {
-      font-family: 'Noto Sans HK', -apple-system, BlinkMacSystemFont, "PingFang HK", "Microsoft JhengHei", sans-serif;
-      margin: 0;
-      padding: 0;
-      overflow-x: hidden;
-    }
+  font-family: 'Noto Sans HK', -apple-system, BlinkMacSystemFont, "PingFang HK", "Microsoft JhengHei", sans-serif;
+  margin: 0;
+  padding: 0;
+  padding-top: env(safe-area-inset-top);
+  overflow-x: hidden;
+}
+
 
     /* 歡樂派對背景漸層 */
     .party-gradient {
