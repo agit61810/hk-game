@@ -1,0 +1,1433 @@
+<!DOCTYPE html>
+<html lang="zh-HK">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>估估畫畫 · 香港版 | 派對體感猜詞遊戲</title>
+  <script src="https://cdn.tailwindcss.com/3.4.17"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+HK:wght@500;700;900&display=swap" rel="stylesheet">
+  <style>
+    * {
+      box-sizing: border-box;
+      -webkit-tap-highlight-color: transparent;
+      user-select: none;
+      -webkit-user-select: none;
+    }
+
+    body {
+      font-family: 'Noto Sans HK', -apple-system, BlinkMacSystemFont, "PingFang HK", "Microsoft JhengHei", sans-serif;
+      margin: 0;
+      padding: 0;
+      overflow-x: hidden;
+    }
+
+    /* 歡樂派對背景漸層 */
+    .party-gradient {
+      background: linear-gradient(135deg, #FF512F 0%, #F09819 32%, #FF2E93 68%, #2563EB 100%);
+      background-size: 240% 240%;
+      animation: gradientFlow 12s ease infinite;
+    }
+
+    @keyframes gradientFlow {
+      0% { background-position: 0% 50%; }
+      50% { background-position: 100% 50%; }
+      100% { background-position: 0% 50%; }
+    }
+
+    /* Q彈微動畫 */
+    .btn-bouncy {
+      transition: transform 0.18s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.18s ease, background-color 0.18s ease;
+    }
+    .btn-bouncy:hover {
+      transform: translateY(-2px) scale(1.02);
+    }
+    .btn-bouncy:active {
+      transform: translateY(2px) scale(0.95);
+    }
+
+    .card-selected {
+      ring: 4px solid #FBBF24;
+      transform: translateY(-4px) scale(1.02);
+      box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.28), 0 0 0 4px #FACC15;
+    }
+
+    /* 遠距離高可讀題目字級 */
+    .word-giant {
+      font-weight: 900;
+      font-size: clamp(4.2rem, 15vw, 10rem);
+      line-height: 1.08;
+      letter-spacing: 0.03em;
+      text-shadow: 0 6px 24px rgba(0, 0, 0, 0.45), 0 2px 6px rgba(0, 0, 0, 0.35);
+      word-break: keep-all;
+    }
+
+    .feedback-giant {
+      font-weight: 900;
+      font-size: clamp(4.5rem, 16vw, 10.5rem);
+      line-height: 1.08;
+      text-shadow: 0 6px 24px rgba(0, 0, 0, 0.35);
+    }
+
+    /* 倒數最後 10 秒緊急閃爍 */
+    @keyframes urgentPulse {
+      0%, 100% {
+        transform: scale(1);
+        background-color: #DC2626;
+        color: #FFFFFF;
+      }
+      50% {
+        transform: scale(1.14);
+        background-color: #FEF08A;
+        color: #991B1B;
+      }
+    }
+    .timer-urgent {
+      animation: urgentPulse 0.55s infinite ease-in-out;
+    }
+
+    /* 題目入場彈跳 */
+    @keyframes popIn {
+      0% { transform: scale(0.72); opacity: 0; }
+      70% { transform: scale(1.05); opacity: 1; }
+      100% { transform: scale(1); opacity: 1; }
+    }
+    .animate-pop {
+      animation: popIn 0.24s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+    }
+
+    /* 準備階段手機搖擺示意 */
+    @keyframes phoneTiltDemo {
+      0%, 100% { transform: rotate(0deg) scale(1); }
+      25% { transform: rotate(18deg) scale(1.05); }
+      75% { transform: rotate(-18deg) scale(1.05); }
+    }
+    .animate-tilt-demo {
+      animation: phoneTiltDemo 2.2s infinite ease-in-out;
+    }
+
+    /* 自訂捲軸美化 */
+    ::-webkit-scrollbar {
+      width: 6px;
+      height: 6px;
+    }
+    ::-webkit-scrollbar-track {
+      background: rgba(255, 255, 255, 0.1);
+    }
+    ::-webkit-scrollbar-thumb {
+      background: rgba(255, 255, 255, 0.35);
+      border-radius: 9999px;
+    }
+  </style>
+</head>
+<body class="party-gradient min-h-screen text-white relative">
+
+  <!-- 慶祝彩帶 Canvas -->
+  <canvas id="confetti-canvas" class="fixed inset-0 pointer-events-none z-50 hidden"></canvas>
+
+  <!-- 遊戲規則說明 Modal -->
+  <div id="help-modal" class="fixed inset-0 z-50 hidden items-center justify-center bg-slate-950/80 backdrop-blur-md p-4">
+    <div class="bg-white text-slate-900 rounded-3xl max-w-lg w-full p-6 md:p-8 shadow-2xl border-4 border-yellow-400 relative animate-pop max-h-[90vh] overflow-y-auto">
+      <div class="flex items-center justify-between mb-4">
+        <h3 class="text-2xl font-black text-slate-900 flex items-center gap-2">
+          <span>🎉</span> 派對玩法說明
+        </h3>
+        <button id="close-help-btn" type="button" class="btn-bouncy w-10 h-10 rounded-full bg-slate-100 hover:bg-slate-200 flex items-center justify-center text-slate-700 font-black text-lg">
+          ✕
+        </button>
+      </div>
+
+      <div class="space-y-4 text-sm md:text-base leading-relaxed">
+        <div class="p-3.5 rounded-2xl bg-blue-50 border border-blue-200">
+          <div class="font-black text-blue-900 mb-1">1. 貼近額頭・面向隊友 📱</div>
+          <p class="text-slate-700">點擊「開始遊戲」後，將手機<strong>橫放並貼近自己額頭</strong>，讓對面的隊友清楚看到螢幕上的香港地道詞語。隊友可用說話、動作或音效提示（不可直接講出字面）！</p>
+        </div>
+
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div class="p-3.5 rounded-2xl bg-emerald-50 border-2 border-emerald-300">
+            <div class="font-black text-emerald-800 text-base mb-1">⭕ 估中（答對）</div>
+            <p class="text-slate-700 text-sm">將手機<strong>向下點頭傾側</strong>（螢幕朝向地面），或點擊螢幕<strong>左半邊</strong> / 按鍵盤 <strong>⬇️ 下鍵</strong>。</p>
+          </div>
+          <div class="p-3.5 rounded-2xl bg-amber-50 border-2 border-amber-300">
+            <div class="font-black text-amber-800 text-base mb-1">⏭️ 跳過（Pass）</div>
+            <p class="text-slate-700 text-sm">將手機<strong>向上仰頭傾側</strong>（螢幕朝向天花板），或點擊螢幕<strong>右半邊</strong> / 按鍵盤 <strong>⬆️ 上鍵</strong>。</p>
+          </div>
+        </div>
+
+        <div class="p-3.5 rounded-2xl bg-purple-50 border border-purple-200">
+          <div class="font-black text-purple-900 mb-1">🛡️ 防誤觸回正保護（Hysteresis）</div>
+          <p class="text-slate-700 text-sm">每次點頭或仰頭觸發後，必須將手機<strong>回正至垂直貼近額頭的角度</strong>並經過 0.8 秒冷卻，才會觸發下一題，放心大動作玩都唔怕連跳幾題！</p>
+        </div>
+      </div>
+
+      <button id="got-it-help-btn" type="button" class="btn-bouncy mt-6 w-full py-3.5 rounded-2xl bg-gradient-to-r from-blue-600 to-indigo-600 text-white font-black text-lg shadow-lg">
+        明白晒！即刻開局 🚀
+      </button>
+    </div>
+  </div>
+
+  <!-- ==================== 1. 主畫面 (HOME SCREEN) ==================== -->
+  <main id="screen-home" class="min-h-screen flex flex-col justify-between max-w-5xl mx-auto px-4 py-5 md:py-8">
+    <!-- 頂部控制列 -->
+    <header class="flex items-center justify-between gap-2">
+      <div class="inline-flex items-center gap-2 bg-white/20 backdrop-blur-md px-3.5 py-1.5 rounded-full border border-white/30 shadow-sm">
+        <span class="text-lg">🇭🇰</span>
+        <span class="font-bold text-xs md:text-sm tracking-wide">香港地道派對遊戲</span>
+      </div>
+
+      <div class="flex items-center gap-2">
+        <button id="open-help-btn" type="button" class="btn-bouncy flex items-center gap-1.5 bg-white/20 hover:bg-white/30 backdrop-blur-md px-3.5 py-2 rounded-full border border-white/30 text-xs md:text-sm font-bold shadow">
+          <span>💡</span>
+          <span>玩法說明</span>
+        </button>
+
+        <button id="sound-toggle-btn" type="button" class="btn-bouncy flex items-center gap-1.5 bg-white text-slate-900 px-4 py-2 rounded-full font-black text-xs md:text-sm shadow-lg border-2 border-yellow-300">
+          <span id="sound-icon">🔊</span>
+          <span id="sound-label">音效：開啟</span>
+        </button>
+      </div>
+    </header>
+
+    <!-- 遊戲標題 Hero -->
+    <section class="text-center my-4 md:my-6">
+      <h1 class="text-4xl sm:text-6xl md:text-7xl font-black tracking-tight drop-shadow-[0_6px_12px_rgba(0,0,0,0.35)]">
+        估估畫畫 <span class="text-yellow-300">· 香港版</span>
+      </h1>
+      <p class="mt-2 text-white/95 font-bold text-sm md:text-lg max-w-xl mx-auto drop-shadow">
+        手機貼額頭！向下點頭「估中⭕」、向上仰頭「跳過⏭️」，同班 Friend 鬥快估中最多香港地道詞語！
+      </p>
+    </section>
+
+    <!-- 題庫分類選擇 (5 大分類卡片) -->
+    <section class="my-2">
+      <div class="flex items-center justify-between mb-3 px-1">
+        <h2 class="text-lg md:text-xl font-black flex items-center gap-2 drop-shadow">
+          <span>🗂️</span> 1. 選擇香港地道題庫（同局詞語絕不重複）
+        </h2>
+        <span id="selected-cat-badge" class="text-xs md:text-sm bg-black/30 backdrop-blur px-3 py-1 rounded-full font-bold border border-white/20">
+          已選：全部撈亂大雜燴
+        </span>
+      </div>
+
+      <div id="category-grid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3.5">
+        <!-- 由 JS 動態渲染 5 張高飽和度分類卡片 -->
+      </div>
+    </section>
+
+    <!-- 時間選擇與開始按鈕區 -->
+    <section class="mt-5 bg-white/15 backdrop-blur-xl rounded-3xl p-4 md:p-6 border-2 border-white/30 shadow-2xl">
+      <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+        <!-- 每局時間選擇 -->
+        <div>
+          <div class="text-sm md:text-base font-black mb-2 flex items-center gap-1.5">
+            <span>⏱️</span> 2. 選擇每局時間
+          </div>
+          <div class="inline-flex bg-black/25 p-1.5 rounded-2xl gap-2 border border-white/15" role="group" aria-label="每局時間選擇">
+            <button type="button" data-duration="60" class="duration-btn btn-bouncy px-5 py-2.5 rounded-xl font-black text-sm md:text-base bg-yellow-400 text-slate-950 shadow-md">
+              60 秒
+            </button>
+            <button type="button" data-duration="90" class="duration-btn btn-bouncy px-5 py-2.5 rounded-xl font-black text-sm md:text-base text-white hover:bg-white/15">
+              90 秒
+            </button>
+            <button type="button" data-duration="120" class="duration-btn btn-bouncy px-5 py-2.5 rounded-xl font-black text-sm md:text-base text-white hover:bg-white/15">
+              120 秒
+            </button>
+          </div>
+        </div>
+
+        <!-- 開始遊戲主按鈕 -->
+        <div class="flex-1 md:max-w-xs">
+          <button id="start-game-btn" type="button" class="btn-bouncy w-full py-4 px-6 rounded-2xl bg-gradient-to-r from-yellow-300 via-amber-400 to-orange-400 text-slate-950 font-black text-xl md:text-2xl shadow-[0_10px_25px_rgba(251,191,36,0.5)] border-2 border-white flex items-center justify-center gap-2">
+            <span>🎬</span>
+            <span>開始遊戲</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- 感應器與備用操作小提示 -->
+      <div class="mt-3 pt-3 border-t border-white/20 flex flex-wrap items-center justify-between gap-2 text-xs text-white/90 font-medium">
+        <span id="sensor-status-hint">📲 點擊「開始遊戲」時會自動啟用手機陀螺儀體感偵測</span>
+        <span>💻 備用操作：點擊螢幕左半＝估中 / 右半＝跳過（或鍵盤 ⬆️ / ⬇️）</span>
+      </div>
+    </section>
+  </main>
+
+  <!-- ==================== 2. 準備與遊戲進行階段 (ACTIVE GAME CONTAINER) ==================== -->
+  <div id="screen-active" class="fixed inset-0 z-30 hidden select-none overflow-hidden bg-[#1E3A8A]">
+
+    <!-- 直向螢幕提示遮罩 (Portrait Warning Overlay) -->
+    <div id="portrait-overlay" class="fixed inset-0 z-40 hidden bg-slate-950/95 backdrop-blur-lg flex-col items-center justify-center p-6 text-center">
+      <div class="text-7xl md:text-8xl mb-4 animate-bounce">🔄</div>
+      <h2 class="text-3xl md:text-5xl font-black text-yellow-300 mb-3 tracking-wide">
+        請將手機打橫 🔄
+      </h2>
+      <p class="text-white/90 text-base md:text-xl max-w-md font-bold leading-relaxed mb-6">
+        為確保 2 至 3 米外的隊友清晰睇見超大字體，請將手機轉為<strong>橫向（Landscape）</strong>並貼近額頭！
+      </p>
+      <button id="dismiss-portrait-btn" type="button" class="btn-bouncy px-6 py-3 rounded-2xl bg-white/15 hover:bg-white/25 border border-white/30 text-white font-bold text-sm">
+        繼續喺目前方向遊玩（桌面 / 測試模式）
+      </button>
+    </div>
+
+    <!-- 2A. 準備階段 3-2-1 倒數畫面 (PREP SCREEN) -->
+    <section id="view-prep" class="w-full h-full flex flex-col items-center justify-between p-6 bg-gradient-to-br from-indigo-950 via-[#1E3A8A] to-blue-900 text-center relative">
+      <div class="w-full flex items-center justify-between">
+        <button id="cancel-prep-btn" type="button" class="btn-bouncy px-4 py-2 rounded-full bg-white/15 hover:bg-white/25 text-white font-bold text-xs md:text-sm border border-white/25">
+          ← 返回主畫面
+        </button>
+        <div id="prep-category-pill" class="px-4 py-1.5 rounded-full bg-yellow-400 text-slate-950 font-black text-xs md:text-sm shadow">
+          茶餐廳與街頭小食
+        </div>
+        <div class="w-20"></div>
+      </div>
+
+      <div class="my-auto flex flex-col items-center max-w-2xl">
+        <div class="text-5xl md:text-6xl mb-3 animate-tilt-demo">📱🙆‍♂️</div>
+        <p class="text-xl sm:text-2xl md:text-3xl font-black text-yellow-300 tracking-wide mb-2 drop-shadow">
+          請將手機橫放並貼近額頭，面向隊友
+        </p>
+        <p class="text-xs sm:text-sm md:text-base text-blue-100 font-bold mb-4">
+          向下點頭 ＝ <span class="text-emerald-300">估中 ⭕</span> ｜ 向上仰頭 ＝ <span class="text-amber-300">跳過 ⏭️</span>
+        </p>
+
+        <!-- 3, 2, 1 大字倒數 -->
+        <div id="prep-countdown-number" class="font-black text-7xl sm:text-8xl md:text-9xl text-white drop-shadow-[0_8px_24px_rgba(0,0,0,0.5)] leading-none">
+          3
+        </div>
+      </div>
+
+      <div class="text-xs md:text-sm text-blue-200/90 font-semibold">
+        保持手機垂直貼額頭即可自動校準中立角度
+      </div>
+    </section>
+
+    <!-- 2B. 遊戲進行中極簡高對比畫面 (PLAYING SCREEN) -->
+    <section id="view-play" class="w-full h-full hidden flex-col justify-between relative bg-[#1E3A8A] transition-colors duration-100">
+
+      <!-- 左右半邊觸控備用區 (不干擾視覺，支援無陀螺儀或桌面點擊) -->
+      <div class="absolute inset-0 z-10 grid grid-cols-2">
+        <div id="touch-left-pass" class="h-full w-full cursor-pointer active:bg-white/5" title="點擊左半邊：估中 (答對)"></div>
+        <div id="touch-right-correct" class="h-full w-full cursor-pointer active:bg-white/5" title="點擊右半邊：跳過 (Pass)"></div>
+      </div>
+
+      <!-- 頂部邊緣狀態列：正中央高對比剩餘秒數 -->
+      <div class="relative z-20 w-full pt-3 md:pt-4 px-6 flex items-center justify-between pointer-events-none">
+        <!-- 左上角極低調退出鍵（可點擊） -->
+        <button id="quit-play-btn" type="button" class="pointer-events-auto opacity-40 hover:opacity-90 transition-opacity px-3 py-1 rounded-full bg-black/30 text-white text-xs font-bold border border-white/20">
+          結束
+        </button>
+
+        <!-- 頂部正中央倒數計時器 -->
+        <div id="play-timer-badge" class="px-6 py-1.5 rounded-full bg-black/40 border-2 border-white/30 text-white font-black text-2xl sm:text-3xl md:text-4xl tracking-wider shadow-lg">
+          60s
+        </div>
+
+        <!-- 右上角陀螺儀回正狀態微型指示燈 -->
+        <div id="tilt-ready-dot" class="px-3 py-1 rounded-full bg-black/30 border border-white/20 text-xs font-bold text-emerald-300 flex items-center gap-1.5">
+          <span class="w-2 h-2 rounded-full bg-emerald-400 inline-block"></span>
+          <span id="tilt-status-text">就緒</span>
+        </div>
+      </div>
+
+      <!-- 螢幕正中央：超大尺寸詞語 (遠距離 2-3 米極清) -->
+      <div class="relative z-10 my-auto px-4 sm:px-8 w-full flex items-center justify-center text-center pointer-events-none">
+        <div id="play-word-text" class="word-giant text-white select-none">
+          菠蘿油
+        </div>
+      </div>
+
+      <!-- 底部邊緣狀態列：累計答對題數 -->
+      <div class="relative z-20 w-full pb-3 md:pb-4 px-6 flex items-center justify-center pointer-events-none">
+        <div class="px-5 py-1 rounded-full bg-black/35 border border-white/25 text-white font-black text-base sm:text-lg md:text-xl tracking-wide shadow">
+          目前估中：<span id="play-score-count" class="text-yellow-300">0</span> 題
+        </div>
+      </div>
+
+      <!-- 全螢幕即時視覺回饋遮罩 (估中 #10B981 / 跳過 #F59E0B) -->
+      <div id="feedback-overlay" class="fixed inset-0 z-30 hidden flex-col items-center justify-center text-center pointer-events-none px-4">
+        <div id="feedback-main-text" class="feedback-giant text-white">
+          估中！⭕
+        </div>
+        <div id="feedback-sub-text" class="mt-2 text-2xl sm:text-3xl md:text-4xl font-black text-white/95 drop-shadow">
+          +1 分
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <!-- ==================== 3. 結算畫面 (RESULTS SCREEN) ==================== -->
+  <section id="screen-results" class="min-h-screen hidden flex-col justify-between max-w-4xl mx-auto px-4 py-6 md:py-10 relative z-20">
+    <div class="bg-white/15 backdrop-blur-xl rounded-3xl p-5 sm:p-8 border-2 border-white/30 shadow-2xl my-auto">
+
+      <!-- 頂部得分總覽 -->
+      <div class="text-center border-b border-white/25 pb-6">
+        <div class="inline-flex items-center gap-2 px-4 py-1 rounded-full bg-yellow-300 text-slate-950 font-black text-xs sm:text-sm mb-2 shadow">
+          <span>🎊</span>
+          <span id="result-category-name">茶餐廳與街頭小食</span>
+        </div>
+
+        <h2 class="text-2xl sm:text-3xl font-black text-white drop-shadow">
+          時間到！本局總得分
+        </h2>
+
+        <div class="my-3 flex items-baseline justify-center gap-2">
+          <span id="result-total-score" class="text-7xl sm:text-8xl font-black text-yellow-300 drop-shadow-[0_6px_18px_rgba(0,0,0,0.4)]">
+            0
+          </span>
+          <span class="text-2xl sm:text-3xl font-black text-white">題估中</span>
+        </div>
+
+        <p id="result-comment" class="text-sm sm:text-base font-bold text-white/90">
+          勁呀！同隊友默契滿分！🔥
+        </p>
+      </div>
+
+      <!-- 本局詞語紀錄：綠色「估中」與橙色「跳過」標籤 -->
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4 my-6">
+        <!-- 估中詞語列表 -->
+        <div class="bg-emerald-950/45 rounded-2xl p-4 border-2 border-emerald-400/50">
+          <div class="flex items-center justify-between mb-3">
+            <h3 class="font-black text-lg text-emerald-300 flex items-center gap-1.5">
+              <span>⭕</span> 估中詞語
+            </h3>
+            <span id="result-correct-badge" class="px-2.5 py-0.5 rounded-full bg-emerald-500 text-white font-black text-xs">
+              0 題
+            </span>
+          </div>
+          <div id="result-correct-list" class="flex flex-wrap gap-2 max-h-52 overflow-y-auto pr-1">
+            <!-- 綠色標籤 -->
+          </div>
+        </div>
+
+        <!-- 跳過詞語列表 -->
+        <div class="bg-amber-950/45 rounded-2xl p-4 border-2 border-amber-400/50">
+          <div class="flex items-center justify-between mb-3">
+            <h3 class="font-black text-lg text-amber-300 flex items-center gap-1.5">
+              <span>⏭️</span> 跳過詞語
+            </h3>
+            <span id="result-pass-badge" class="px-2.5 py-0.5 rounded-full bg-amber-500 text-slate-950 font-black text-xs">
+              0 題
+            </span>
+          </div>
+          <div id="result-pass-list" class="flex flex-wrap gap-2 max-h-52 overflow-y-auto pr-1">
+            <!-- 橙色標籤 -->
+          </div>
+        </div>
+      </div>
+
+      <!-- 底部操作按鈕：再玩一局 / 更換題庫 -->
+      <div class="flex flex-col sm:flex-row gap-3.5 pt-2">
+        <button id="play-again-btn" type="button" class="btn-bouncy flex-1 py-4 px-6 rounded-2xl bg-gradient-to-r from-emerald-400 to-teal-500 text-slate-950 font-black text-lg sm:text-xl shadow-xl border-2 border-white flex items-center justify-center gap-2">
+          <span>🔄</span>
+          <span>再玩一局（同分類）</span>
+        </button>
+
+        <button id="change-category-btn" type="button" class="btn-bouncy flex-1 py-4 px-6 rounded-2xl bg-gradient-to-r from-yellow-300 to-amber-400 text-slate-950 font-black text-lg sm:text-xl shadow-xl border-2 border-white flex items-center justify-center gap-2">
+          <span>🗂️</span>
+          <span>更換題庫</span>
+        </button>
+      </div>
+    </div>
+  </section>
+
+  <!-- ==================== 遊戲核心邏輯與音效 (NATIVE JAVASCRIPT) ==================== -->
+  <script>
+    // =========================================================================
+    // 1. 內建 5 大香港地道題庫（每類 25 個詞語，同一局內不重複）
+    // =========================================================================
+    const QUESTION_BANKS = [
+      {
+        id: 'food',
+        name: '茶餐廳與街頭小食',
+        icon: '🍍',
+        tagline: '菠蘿油、絲襪奶茶、魚蛋燒賣',
+        gradient: 'from-amber-400 via-orange-500 to-red-500',
+        words: [
+          '菠蘿油', '絲襪奶茶', '咖喱魚蛋', '燒賣', '乾炒牛河',
+          '西多士', '楊枝甘露', '雞蛋仔', '格仔餅', '腸粉',
+          '碗仔翅', '蛋撻', '凍檸茶', '沙嗲牛肉麵', '叉燒飯',
+          '雲吞麵', '車仔麵', '煎釀三寶', '豆腐花', '砵仔糕',
+          '煲仔飯', '咸檸七', '紅豆冰', '公司三文治', '瑞士雞翼'
+        ]
+      },
+      {
+        id: 'landmarks',
+        name: '香港地標與交通',
+        icon: '⛴️',
+        tagline: '天星小輪、叮叮車、獅子山',
+        gradient: 'from-cyan-400 via-blue-500 to-indigo-600',
+        words: [
+          '天星小輪', '叮叮車', '山頂纜車', '太平山頂', '維多利亞港',
+          '海洋公園', '香港迪士尼', '天壇大佛', '蘭桂坊', '黃大仙祠',
+          '星光大道', '紅館', '獅子山', '紅Van', '港鐵',
+          '的士', '香港國際機場', '長洲', '大澳', '廟街',
+          '女人街', '時代廣場', '青馬大橋', '淺水灣', '鴨寮街'
+        ]
+      },
+      {
+        id: 'movies',
+        name: '港產片與經典劇集',
+        icon: '🎬',
+        tagline: '無間道、功夫、九龍城寨、破·地獄',
+        gradient: 'from-purple-500 via-fuchsia-500 to-pink-500',
+        words: [
+          '無間道', '功夫', '賭神', '喜劇之王', '尋秦記',
+          '愛·回家', '九龍城寨之圍城', '寒戰', '少林足球', '食神',
+          '葉問', '重慶森林', '頭文字D', '逃學威龍', '唐伯虎點秋香',
+          '使徒行者', '巾幗梟雄', '男親女愛', '大時代', '烈火戰車',
+          '破·地獄', '毒舌大狀', '飯戲攻心', '明日戰記', '英雄本色'
+        ]
+      },
+      {
+        id: 'slang',
+        name: '香港地道潮語',
+        icon: '🔥',
+        tagline: '世一、Firm、自肥、放飛機、蛇王',
+        gradient: 'from-emerald-400 via-teal-500 to-cyan-600',
+        words: [
+          '世一', 'Firm', '自肥', '社死', '躺平',
+          '佛系', '派膠', '潛水', '放飛機', '蛇王',
+          '吹水', '打卡', '掃街', '巴打', '離地',
+          '貼地', '屈機', '炒車', '抽水', '圍爐',
+          '收兵', '執生', '淆底', 'O嘴', '扮工'
+        ]
+      },
+      {
+        id: 'cantopop',
+        name: '廣東歌與本地藝人',
+        icon: '🎤',
+        tagline: '陳奕迅、張敬軒、MIRROR、海闊天空',
+        gradient: 'from-rose-500 via-pink-500 to-violet-600',
+        words: [
+          '陳奕迅', '張敬軒', '浮誇', '海闊天空', 'MIRROR',
+          'MC張天賦', '林家謙', '周星馳', '劉德華', '梁朝偉',
+          '古天樂', '鄭秀文', '容祖兒', '謝霆鋒', 'Beyond',
+          'Twins', '姜濤', '尹光', '紅日', '富士山下',
+          '單車', '好心分手', '喜帖街', '記憶棉', '一人之境'
+        ]
+      }
+    ];
+
+    // 新增第 6 個分類：全部題目撈亂（集合五大分類共 125 個不重複詞語）
+    QUESTION_BANKS.unshift({
+      id: 'all_mix',
+      name: '全部撈亂大雜燴',
+      icon: '🎲',
+      tagline: '五大分類 125 個詞語隨機大混戰！',
+      gradient: 'from-yellow-400 via-rose-500 to-indigo-600',
+      words: Array.from(new Set(QUESTION_BANKS.flatMap(cat => cat.words)))
+    });
+
+    // =========================================================================
+    // 2. Web Audio API 原生合成音效系統（無需外部音檔）
+    // =========================================================================
+    const SoundFX = {
+      ctx: null,
+      enabled: true,
+
+      init() {
+        if (!this.ctx) {
+          const AudioCtx = window.AudioContext || window.webkitAudioContext;
+          if (AudioCtx) {
+            this.ctx = new AudioCtx();
+          }
+        }
+        if (this.ctx && this.ctx.state === 'suspended') {
+          this.ctx.resume();
+        }
+      },
+
+      // UI 點擊輕脆音效
+      playClick() {
+        if (!this.enabled) return;
+        this.init();
+        if (!this.ctx) return;
+
+        const now = this.ctx.currentTime;
+        const osc = this.ctx.createOscillator();
+        const gain = this.ctx.createGain();
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(660, now);
+        osc.frequency.exponentialRampToValueAtTime(880, now + 0.06);
+
+        gain.gain.setValueAtTime(0.12, now);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.06);
+
+        osc.connect(gain);
+        gain.connect(this.ctx.destination);
+        osc.start(now);
+        osc.stop(now + 0.065);
+      },
+
+      // 準備階段 3、2、1 倒數提示音（isGo=true 時為高音開局聲）
+      playCountdownBeep(isGo = false) {
+        if (!this.enabled) return;
+        this.init();
+        if (!this.ctx) return;
+
+        const now = this.ctx.currentTime;
+        const osc = this.ctx.createOscillator();
+        const gain = this.ctx.createGain();
+
+        osc.type = 'triangle';
+        osc.frequency.setValueAtTime(isGo ? 1046.5 : 523.25, now); // C6 or C5
+
+        const duration = isGo ? 0.32 : 0.16;
+        gain.gain.setValueAtTime(0.26, now);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + duration);
+
+        osc.connect(gain);
+        gain.connect(this.ctx.destination);
+        osc.start(now);
+        osc.stop(now + duration);
+      },
+
+      // 「估中」時的輕快上升雙音（Ding-Dong / C6 -> E6）
+      playCorrect() {
+        if (!this.enabled) return;
+        this.init();
+        if (!this.ctx) return;
+
+        const now = this.ctx.currentTime;
+        const notes = [
+          { freq: 987.77, start: 0, dur: 0.12 },    // B5
+          { freq: 1318.51, start: 0.1, dur: 0.28 }  // E6
+        ];
+
+        notes.forEach(n => {
+          const osc = this.ctx.createOscillator();
+          const gain = this.ctx.createGain();
+          osc.type = 'sine';
+          osc.frequency.setValueAtTime(n.freq, now + n.start);
+
+          gain.gain.setValueAtTime(0.3, now + n.start);
+          gain.gain.exponentialRampToValueAtTime(0.001, now + n.start + n.dur);
+
+          osc.connect(gain);
+          gain.connect(this.ctx.destination);
+          osc.start(now + n.start);
+          osc.stop(now + n.start + n.dur);
+        });
+      },
+
+      // 「跳過」時的短促低音滑落（Whoosh）
+      playPass() {
+        if (!this.enabled) return;
+        this.init();
+        if (!this.ctx) return;
+
+        const now = this.ctx.currentTime;
+        const osc = this.ctx.createOscillator();
+        const gain = this.ctx.createGain();
+
+        osc.type = 'sawtooth';
+        osc.frequency.setValueAtTime(340, now);
+        osc.frequency.exponentialRampToValueAtTime(120, now + 0.22);
+
+        gain.gain.setValueAtTime(0.22, now);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.23);
+
+        osc.connect(gain);
+        gain.connect(this.ctx.destination);
+        osc.start(now);
+        osc.stop(now + 0.24);
+      },
+
+      // 最後 5 秒倒數急促滴答聲
+      playUrgentTick() {
+        if (!this.enabled) return;
+        this.init();
+        if (!this.ctx) return;
+
+        const now = this.ctx.currentTime;
+        const osc = this.ctx.createOscillator();
+        const gain = this.ctx.createGain();
+
+        osc.type = 'square';
+        osc.frequency.setValueAtTime(880, now);
+
+        gain.gain.setValueAtTime(0.15, now);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.08);
+
+        osc.connect(gain);
+        gain.connect(this.ctx.destination);
+        osc.start(now);
+        osc.stop(now + 0.09);
+      },
+
+      // 時間到結束鈴聲與歡呼琶音
+      playTimeUpFanfare() {
+        if (!this.enabled) return;
+        this.init();
+        if (!this.ctx) return;
+
+        const now = this.ctx.currentTime;
+        const chord = [523.25, 659.25, 783.99, 1046.5]; // C5, E5, G5, C6
+        chord.forEach((freq, idx) => {
+          const osc = this.ctx.createOscillator();
+          const gain = this.ctx.createGain();
+          osc.type = 'triangle';
+          const startTime = now + idx * 0.09;
+          const dur = idx === chord.length - 1 ? 0.55 : 0.2;
+
+          osc.frequency.setValueAtTime(freq, startTime);
+          gain.gain.setValueAtTime(0.25, startTime);
+          gain.gain.exponentialRampToValueAtTime(0.001, startTime + dur);
+
+          osc.connect(gain);
+          gain.connect(this.ctx.destination);
+          osc.start(startTime);
+          osc.stop(startTime + dur);
+        });
+      }
+    };
+
+    // =========================================================================
+    // 3. 遊戲狀態管理 (Game State)
+    // =========================================================================
+    const state = {
+      phase: 'HOME', // 'HOME' | 'PREP' | 'PLAYING' | 'RESULTS'
+      selectedCategoryId: 'all_mix',
+      selectedDuration: 60,
+      remainingSeconds: 60,
+      deck: [],
+      currentWordIndex: 0,
+      correctWords: [],
+      passedWords: [],
+      isFeedbackShowing: false,
+      dismissedPortraitWarning: false,
+      prepCountdownStarted: false,
+
+      // 計時器參考
+      prepIntervalId: null,
+      gameIntervalId: null,
+      feedbackTimeoutId: null,
+
+      // 陀螺儀防誤觸與回正狀態 (Hysteresis & Cooldown)
+      sensorListening: false,
+      neutralReady: true,          // 是否已回正到額頭垂直區間
+      cooldownUntil: 0,            // 0.8 秒冷卻結束時間戳 (ms)
+      baselineGravityZ: null       // 動態輔助基準
+    };
+
+    // =========================================================================
+    // 4. DOM 元素快取
+    // =========================================================================
+    const els = {
+      screenHome: document.getElementById('screen-home'),
+      screenActive: document.getElementById('screen-active'),
+      screenResults: document.getElementById('screen-results'),
+      viewPrep: document.getElementById('view-prep'),
+      viewPlay: document.getElementById('view-play'),
+      portraitOverlay: document.getElementById('portrait-overlay'),
+      dismissPortraitBtn: document.getElementById('dismiss-portrait-btn'),
+
+      categoryGrid: document.getElementById('category-grid'),
+      selectedCatBadge: document.getElementById('selected-cat-badge'),
+      durationBtns: document.querySelectorAll('.duration-btn'),
+      startGameBtn: document.getElementById('start-game-btn'),
+      soundToggleBtn: document.getElementById('sound-toggle-btn'),
+      soundIcon: document.getElementById('sound-icon'),
+      soundLabel: document.getElementById('sound-label'),
+      sensorStatusHint: document.getElementById('sensor-status-hint'),
+
+      helpModal: document.getElementById('help-modal'),
+      openHelpBtn: document.getElementById('open-help-btn'),
+      closeHelpBtn: document.getElementById('close-help-btn'),
+      gotItHelpBtn: document.getElementById('got-it-help-btn'),
+
+      cancelPrepBtn: document.getElementById('cancel-prep-btn'),
+      prepCategoryPill: document.getElementById('prep-category-pill'),
+      prepCountdownNumber: document.getElementById('prep-countdown-number'),
+
+      quitPlayBtn: document.getElementById('quit-play-btn'),
+      playTimerBadge: document.getElementById('play-timer-badge'),
+      playWordText: document.getElementById('play-word-text'),
+      playScoreCount: document.getElementById('play-score-count'),
+      tiltReadyDot: document.getElementById('tilt-ready-dot'),
+      tiltStatusText: document.getElementById('tilt-status-text'),
+
+      touchLeftPass: document.getElementById('touch-left-pass'),
+      touchRightCorrect: document.getElementById('touch-right-correct'),
+      feedbackOverlay: document.getElementById('feedback-overlay'),
+      feedbackMainText: document.getElementById('feedback-main-text'),
+      feedbackSubText: document.getElementById('feedback-sub-text'),
+
+      resultCategoryName: document.getElementById('result-category-name'),
+      resultTotalScore: document.getElementById('result-total-score'),
+      resultComment: document.getElementById('result-comment'),
+      resultCorrectBadge: document.getElementById('result-correct-badge'),
+      resultPassBadge: document.getElementById('result-pass-badge'),
+      resultCorrectList: document.getElementById('result-correct-list'),
+      resultPassList: document.getElementById('result-pass-list'),
+      playAgainBtn: document.getElementById('play-again-btn'),
+      changeCategoryBtn: document.getElementById('change-category-btn'),
+
+      confettiCanvas: document.getElementById('confetti-canvas')
+    };
+
+    // =========================================================================
+    // 5. 初始化與渲染主畫面題庫卡片
+    // =========================================================================
+    function renderCategoryCards() {
+      els.categoryGrid.innerHTML = '';
+      QUESTION_BANKS.forEach(cat => {
+        const isSelected = cat.id === state.selectedCategoryId;
+        const card = document.createElement('button');
+        card.type = 'button';
+        card.className = `btn-bouncy text-left rounded-3xl p-4 md:p-5 bg-gradient-to-br ${cat.gradient} border-2 border-white/50 shadow-xl relative overflow-hidden transition-all ${
+          isSelected ? 'card-selected' : 'opacity-90 hover:opacity-100'
+        }`;
+
+        card.innerHTML = `
+          <div class="flex items-start justify-between gap-2">
+            <span class="text-4xl md:text-5xl drop-shadow">${cat.icon}</span>
+            <span class="px-2.5 py-1 rounded-full text-xs font-black ${
+              isSelected ? 'bg-yellow-300 text-slate-950 shadow' : 'bg-black/25 text-white'
+            }">
+              ${isSelected ? '✓ 已選擇' : `${cat.words.length} 詞語`}
+            </span>
+          </div>
+          <div class="mt-3">
+            <h3 class="text-xl md:text-2xl font-black text-white drop-shadow-sm">${cat.name}</h3>
+            <p class="text-xs md:text-sm text-white/90 font-bold mt-1 truncate">${cat.tagline}</p>
+          </div>
+        `;
+
+        card.addEventListener('click', () => {
+          SoundFX.playClick();
+          state.selectedCategoryId = cat.id;
+          els.selectedCatBadge.textContent = `已選：${cat.name}`;
+          renderCategoryCards();
+        });
+
+        els.categoryGrid.appendChild(card);
+      });
+    }
+
+    // 洗牌演算法（Fisher-Yates Shuffle，確保同局 25 個詞語隨機且不重複）
+    function shuffleWords(wordsArray) {
+      const arr = [...wordsArray];
+      for (let i = arr.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [arr[i], arr[j]] = [arr[j], arr[i]];
+      }
+      return arr;
+    }
+
+    function getSelectedCategory() {
+      return QUESTION_BANKS.find(c => c.id === state.selectedCategoryId) || QUESTION_BANKS[0];
+    }
+
+    // =========================================================================
+    // 6. 螢幕橫向檢測 (Landscape Orientation Check)
+    // =========================================================================
+    function checkOrientationOverlay() {
+      if (state.phase !== 'PREP' && state.phase !== 'PLAYING') {
+        els.portraitOverlay.classList.add('hidden');
+        els.portraitOverlay.classList.remove('flex');
+        return;
+      }
+
+      if (state.dismissedPortraitWarning) {
+        els.portraitOverlay.classList.add('hidden');
+        els.portraitOverlay.classList.remove('flex');
+        if (state.phase === 'PREP' && !state.prepCountdownStarted) {
+          beginPrepCountdown();
+        }
+        return;
+      }
+
+      const isPortrait = window.innerHeight > window.innerWidth;
+      if (isPortrait) {
+        els.portraitOverlay.classList.remove('hidden');
+        els.portraitOverlay.classList.add('flex');
+      } else {
+        els.portraitOverlay.classList.add('hidden');
+        els.portraitOverlay.classList.remove('flex');
+        if (state.phase === 'PREP' && !state.prepCountdownStarted) {
+          beginPrepCountdown();
+        }
+      }
+    }
+
+    window.addEventListener('resize', checkOrientationOverlay);
+    window.addEventListener('orientationchange', checkOrientationOverlay);
+
+    // =========================================================================
+    // 7. 陀螺儀體感偵測 (DeviceOrientation API + 防誤觸 Hysteresis)
+    // =========================================================================
+    async function requestGyroPermissionAndBind() {
+      try {
+        if (
+          typeof DeviceOrientationEvent !== 'undefined' &&
+          typeof DeviceOrientationEvent.requestPermission === 'function'
+        ) {
+          const permissionState = await DeviceOrientationEvent.requestPermission();
+          if (permissionState === 'granted') {
+            bindOrientationListener();
+            els.sensorStatusHint.textContent = '✅ iOS 陀螺儀體感已授權開啟！';
+          } else {
+            els.sensorStatusHint.textContent = '⚠️ 未授予陀螺儀權限，可使用螢幕左右點擊代替體感。';
+          }
+        } else if (typeof DeviceOrientationEvent !== 'undefined') {
+          bindOrientationListener();
+        }
+      } catch (err) {
+        // 在桌面瀏覽器或非 HTTPS iframe 中優雅降級至觸控與鍵盤
+        bindOrientationListener();
+      }
+    }
+
+    function bindOrientationListener() {
+      if (state.sensorListening) return;
+      window.addEventListener('deviceorientation', handleDeviceOrientation, true);
+      state.sensorListening = true;
+    }
+
+    /**
+     * 計算手機橫放貼近額頭時的俯仰傾角：
+     * 當玩家將手機橫放（Landscape 左橫或右橫）垂直貼於額頭時，
+     * 利用歐拉角 (alpha, beta, gamma) 計算螢幕法向量與重力軸 Z 的分量：
+     *   nz = cos(beta) * cos(gamma)
+     * - 手機垂直貼額頭（中立區間）：|nz| < 0.42（約 ±25° 內）
+     * - 螢幕朝向地面（向下點頭 = 估中）或朝向天花板（向上仰頭 = 跳過）：
+     *   同時兼容橫向 gamma 軸傾角與直向 beta 軸傾角，確保 iOS Safari 與 Android Chrome 雙平台一致靈敏。
+     */
+    function handleDeviceOrientation(event) {
+      if (state.phase !== 'PLAYING' || state.isFeedbackShowing) return;
+
+      const beta = event.beta;   // [-180, 180]
+      const gamma = event.gamma; // [-90, 90]
+      if (beta === null || gamma === null) return;
+
+      const now = performance.now();
+      const deg2rad = Math.PI / 180;
+      const bRad = beta * deg2rad;
+      const gRad = gamma * deg2rad;
+
+      // 計算螢幕平面相對於水平地面/天花板的傾角指標
+      // 當手機橫放貼額頭時：gamma 接近 ±90°，cos(gamma) 接近 0 -> nz 接近 0 (垂直)
+      const nz = Math.cos(bRad) * Math.cos(gRad);
+
+      // 取得螢幕橫向方向角 (90 或 -90/270) 以判斷點頭與仰頭方向
+      let screenAngle = 0;
+      if (window.screen && window.screen.orientation && typeof window.screen.orientation.angle === 'number') {
+        screenAngle = window.screen.orientation.angle;
+      } else if (typeof window.orientation === 'number') {
+        screenAngle = window.orientation;
+      }
+
+      // 決定俯仰角度 pitchDeg：
+      // 正值 (+) 代表向下點頭（螢幕朝向地面），負值 (-) 代表向上仰頭（螢幕朝向天花板）
+      let pitchFromVertical = 0;
+
+      if (Math.abs(gamma) > 20 || Math.abs(screenAngle) === 90 || window.innerWidth > window.innerHeight) {
+        // 橫向握持貼額頭模式
+        // 在標準橫向中：當螢幕轉向地面或天花板時，|gamma| 會從 90° 減小（趨向 0°）
+        // 搭配 gamma 正負號與 screenAngle 判定朝向地面或天花板
+        if (gamma > 0) {
+          // 左側朝下或右側朝上：gamma 90° 為垂直，gamma < 48° 為大角度傾側
+          pitchFromVertical = 90 - gamma; // 正值代表向地面傾側
+        } else {
+          // gamma < 0：-90° 為垂直，gamma > -48° 為反方向大角度傾側
+          pitchFromVertical = -(90 + gamma);
+        }
+
+        // 若裝置屬於反向橫屏 (screenAngle === -90 或 270)，翻轉正負號以保持「下點頭=估中、上仰頭=跳過」
+        if (screenAngle === -90 || screenAngle === 270) {
+          pitchFromVertical = -pitchFromVertical;
+        }
+      } else {
+        // 直向握持測試時：beta 約 90° 為垂直貼額頭，beta > 130° 或 < 50° 為前後傾側
+        pitchFromVertical = 90 - beta;
+      }
+
+      const absTilt = Math.abs(pitchFromVertical);
+      const isNeutralZone = absTilt < 24 && Math.abs(nz) < 0.45;
+
+      // 防誤觸回正機制 (Hysteresis)：必須先回到中立角度區間
+      if (!state.neutralReady) {
+        if (isNeutralZone) {
+          state.neutralReady = true;
+          updateTiltIndicator(true);
+        }
+        return;
+      }
+
+      // 檢查 0.8 秒冷卻時間
+      if (now < state.cooldownUntil) {
+        return;
+      }
+
+      // 觸發閾值：傾側超過 38°
+      const TRIGGER_THRESHOLD = 38;
+      if (pitchFromVertical >= TRIGGER_THRESHOLD) {
+        // 向下點頭（螢幕朝向地面）-> 估中！
+        state.neutralReady = false;
+        state.cooldownUntil = now + 800;
+        updateTiltIndicator(false);
+        triggerWordAction('CORRECT');
+      } else if (pitchFromVertical <= -TRIGGER_THRESHOLD) {
+        // 向上仰頭（螢幕朝向天花板）-> 跳過！
+        state.neutralReady = false;
+        state.cooldownUntil = now + 800;
+        updateTiltIndicator(false);
+        triggerWordAction('PASS');
+      }
+    }
+
+    function updateTiltIndicator(isReady) {
+      if (!els.tiltReadyDot || !els.tiltStatusText) return;
+      const dot = els.tiltReadyDot.querySelector('span');
+      if (isReady) {
+        els.tiltReadyDot.className = 'px-3 py-1 rounded-full bg-black/30 border border-white/20 text-xs font-bold text-emerald-300 flex items-center gap-1.5';
+        if (dot) dot.className = 'w-2 h-2 rounded-full bg-emerald-400 inline-block';
+        els.tiltStatusText.textContent = '就緒';
+      } else {
+        els.tiltReadyDot.className = 'px-3 py-1 rounded-full bg-black/40 border border-amber-300/40 text-xs font-bold text-amber-300 flex items-center gap-1.5';
+        if (dot) dot.className = 'w-2 h-2 rounded-full bg-amber-400 inline-block animate-ping';
+        els.tiltStatusText.textContent = '請回正額頭';
+      }
+    }
+
+    // =========================================================================
+    // 8. 遊戲流程控制 (準備 3-2-1 -> 進行 -> 結算)
+    // =========================================================================
+    function clearAllTimers() {
+      if (state.prepIntervalId) {
+        clearInterval(state.prepIntervalId);
+        state.prepIntervalId = null;
+      }
+      if (state.gameIntervalId) {
+        clearInterval(state.gameIntervalId);
+        state.gameIntervalId = null;
+      }
+      if (state.feedbackTimeoutId) {
+        clearTimeout(state.feedbackTimeoutId);
+        state.feedbackTimeoutId = null;
+      }
+    }
+
+    async function startPrepPhase() {
+      SoundFX.init();
+      SoundFX.playClick();
+      await requestGyroPermissionAndBind();
+
+      clearAllTimers();
+
+      // 嘗試請求橫向鎖定（若瀏覽器支援）
+      if (screen.orientation && typeof screen.orientation.lock === 'function') {
+        screen.orientation.lock('landscape').catch(() => {});
+      }
+
+      const category = getSelectedCategory();
+      state.phase = 'PREP';
+      state.deck = shuffleWords(category.words);
+      state.currentWordIndex = 0;
+      state.correctWords = [];
+      state.passedWords = [];
+      state.remainingSeconds = state.selectedDuration;
+      state.isFeedbackShowing = false;
+      state.neutralReady = true;
+      state.cooldownUntil = 0;
+      state.prepCountdownStarted = false;
+
+      // 切換畫面顯示
+      els.screenHome.classList.add('hidden');
+      els.screenResults.classList.add('hidden');
+      els.screenResults.classList.remove('flex');
+      els.screenActive.classList.remove('hidden');
+
+      els.viewPrep.classList.remove('hidden');
+      els.viewPrep.classList.add('flex');
+      els.viewPlay.classList.add('hidden');
+      els.viewPlay.classList.remove('flex');
+
+      els.prepCategoryPill.textContent = `${category.icon} ${category.name}`;
+      els.prepCountdownNumber.textContent = '3';
+      checkOrientationOverlay();
+    }
+
+    function beginPrepCountdown() {
+      if (state.phase !== 'PREP' || state.prepCountdownStarted) return;
+      state.prepCountdownStarted = true;
+
+      let count = 3;
+      els.prepCountdownNumber.textContent = count;
+      els.prepCountdownNumber.classList.remove('animate-pop');
+      void els.prepCountdownNumber.offsetWidth;
+      els.prepCountdownNumber.classList.add('animate-pop');
+      SoundFX.playCountdownBeep(false);
+
+      state.prepIntervalId = setInterval(() => {
+        count -= 1;
+        if (count > 0) {
+          els.prepCountdownNumber.textContent = count;
+          els.prepCountdownNumber.classList.remove('animate-pop');
+          void els.prepCountdownNumber.offsetWidth;
+          els.prepCountdownNumber.classList.add('animate-pop');
+          SoundFX.playCountdownBeep(false);
+        } else if (count === 0) {
+          els.prepCountdownNumber.textContent = 'GO!';
+          SoundFX.playCountdownBeep(true);
+        } else {
+          clearInterval(state.prepIntervalId);
+          state.prepIntervalId = null;
+          startPlayingPhase();
+        }
+      }, 950);
+    }
+
+    function startPlayingPhase() {
+      state.phase = 'PLAYING';
+      state.neutralReady = true;
+      state.cooldownUntil = performance.now() + 400;
+      updateTiltIndicator(true);
+
+      els.viewPrep.classList.add('hidden');
+      els.viewPrep.classList.remove('flex');
+      els.viewPlay.classList.remove('hidden');
+      els.viewPlay.classList.add('flex');
+      els.feedbackOverlay.classList.add('hidden');
+      els.feedbackOverlay.classList.remove('flex');
+
+      updateTimerUI();
+      els.playScoreCount.textContent = '0';
+      showCurrentWord();
+
+      state.gameIntervalId = setInterval(() => {
+        state.remainingSeconds -= 1;
+        updateTimerUI();
+
+        if (state.remainingSeconds <= 5 && state.remainingSeconds > 0) {
+          SoundFX.playUrgentTick();
+        }
+
+        if (state.remainingSeconds <= 0) {
+          endGameAndShowResults();
+        }
+      }, 1000);
+    }
+
+    function updateTimerUI() {
+      const sec = Math.max(0, state.remainingSeconds);
+      els.playTimerBadge.textContent = `${sec}s`;
+
+      if (sec <= 10) {
+        els.playTimerBadge.classList.add('timer-urgent');
+      } else {
+        els.playTimerBadge.classList.remove('timer-urgent');
+      }
+    }
+
+    function showCurrentWord() {
+      if (state.currentWordIndex >= state.deck.length) {
+        // 已完成該分類全部 25 個不重複詞語，提前完局慶祝！
+        endGameAndShowResults();
+        return;
+      }
+
+      const word = state.deck[state.currentWordIndex];
+      els.playWordText.textContent = word;
+      els.playWordText.classList.remove('animate-pop');
+      void els.playWordText.offsetWidth;
+      els.playWordText.classList.add('animate-pop');
+    }
+
+    // 觸發「估中 (CORRECT)」或「跳過 (PASS)」
+    function triggerWordAction(actionType) {
+      if (state.phase !== 'PLAYING' || state.isFeedbackShowing) return;
+      if (state.currentWordIndex >= state.deck.length) return;
+
+      state.isFeedbackShowing = true;
+      const currentWord = state.deck[state.currentWordIndex];
+
+      if (actionType === 'CORRECT') {
+        state.correctWords.push(currentWord);
+        els.playScoreCount.textContent = String(state.correctWords.length);
+        SoundFX.playCorrect();
+
+        // 亮翠綠色 (#10B981) 全螢幕即時視覺回饋
+        els.feedbackOverlay.style.backgroundColor = '#10B981';
+        els.feedbackMainText.textContent = '估中！⭕';
+        els.feedbackSubText.textContent = `+1 分（${currentWord}）`;
+      } else {
+        state.passedWords.push(currentWord);
+        SoundFX.playPass();
+
+        // 亮橙黃色 (#F59E0B) 全螢幕即時視覺回饋
+        els.feedbackOverlay.style.backgroundColor = '#F59E0B';
+        els.feedbackMainText.textContent = '跳過 ⏭️';
+        els.feedbackSubText.textContent = currentWord;
+      }
+
+      els.feedbackOverlay.classList.remove('hidden');
+      els.feedbackOverlay.classList.add('flex');
+
+      // 維持 0.7 秒後切換下一題
+      state.feedbackTimeoutId = setTimeout(() => {
+        els.feedbackOverlay.classList.add('hidden');
+        els.feedbackOverlay.classList.remove('flex');
+        state.currentWordIndex += 1;
+        state.isFeedbackShowing = false;
+
+        // 觸控或鍵盤操作時，冷卻時間設為 0.8 秒後自動就緒
+        if (performance.now() >= state.cooldownUntil) {
+          state.neutralReady = true;
+          updateTiltIndicator(true);
+        }
+
+        if (state.phase === 'PLAYING') {
+          showCurrentWord();
+        }
+      }, 700);
+    }
+
+    // =========================================================================
+    // 9. 結算畫面與慶祝彩帶動畫 (Confetti)
+    // =========================================================================
+    function endGameAndShowResults() {
+      clearAllTimers();
+      state.phase = 'RESULTS';
+      state.isFeedbackShowing = false;
+
+      SoundFX.playTimeUpFanfare();
+
+      els.screenActive.classList.add('hidden');
+      els.portraitOverlay.classList.add('hidden');
+      els.portraitOverlay.classList.remove('flex');
+
+      els.screenResults.classList.remove('hidden');
+      els.screenResults.classList.add('flex');
+
+      const category = getSelectedCategory();
+      const score = state.correctWords.length;
+
+      els.resultCategoryName.textContent = `${category.icon} ${category.name}`;
+      els.resultTotalScore.textContent = String(score);
+
+      // 根據分數給出地道香港評語
+      if (score >= 18) {
+        els.resultComment.textContent = '🏆 屈機呀！簡直係香港百科全書，世一默契！';
+      } else if (score >= 12) {
+        els.resultComment.textContent = '🔥 勁到飛起！你同隊友心靈相通，Firm 呀！';
+      } else if (score >= 6) {
+        els.resultComment.textContent = '👏 表現唔錯喎！熱身完畢，再玩一局實破紀錄！';
+      } else {
+        els.resultComment.textContent = '😆 笑到肚痛！呢鋪當熱身，即刻開多局反cup啦！';
+      }
+
+      // 渲染綠色「估中」標籤
+      els.resultCorrectBadge.textContent = `${state.correctWords.length} 題`;
+      els.resultCorrectList.innerHTML = '';
+      if (state.correctWords.length === 0) {
+        els.resultCorrectList.innerHTML = '<span class="text-white/60 text-sm font-bold">本局未有估中詞語，下局加油！</span>';
+      } else {
+        state.correctWords.forEach(w => {
+          const badge = document.createElement('span');
+          badge.className = 'px-3.5 py-1.5 rounded-xl bg-emerald-500 text-white font-black text-sm sm:text-base shadow-sm border border-emerald-300';
+          badge.textContent = `⭕ ${w}`;
+          els.resultCorrectList.appendChild(badge);
+        });
+      }
+
+      // 渲染橙色「跳過」標籤
+      els.resultPassBadge.textContent = `${state.passedWords.length} 題`;
+      els.resultPassList.innerHTML = '';
+      if (state.passedWords.length === 0) {
+        els.resultPassList.innerHTML = '<span class="text-white/60 text-sm font-bold">零跳過！百發百中！</span>';
+      } else {
+        state.passedWords.forEach(w => {
+          const badge = document.createElement('span');
+          badge.className = 'px-3.5 py-1.5 rounded-xl bg-amber-500 text-slate-950 font-black text-sm sm:text-base shadow-sm border border-amber-300';
+          badge.textContent = `⏭️ ${w}`;
+          els.resultPassList.appendChild(badge);
+        });
+      }
+
+      launchConfetti();
+    }
+
+    function returnToHome() {
+      SoundFX.playClick();
+      clearAllTimers();
+      stopConfetti();
+      state.phase = 'HOME';
+      state.isFeedbackShowing = false;
+
+      els.screenActive.classList.add('hidden');
+      els.screenResults.classList.add('hidden');
+      els.screenResults.classList.remove('flex');
+      els.screenHome.classList.remove('hidden');
+    }
+
+    // 彩帶粒子系統
+    let confettiAnimId = null;
+    function launchConfetti() {
+      stopConfetti();
+      const canvas = els.confettiCanvas;
+      const ctx = canvas.getContext('2d');
+      canvas.width = window.innerWidth;
+      canvas.height = window.innerHeight;
+      canvas.classList.remove('hidden');
+
+      const colors = ['#FACC15', '#10B981', '#F59E0B', '#EC4899', '#3B82F6', '#FFFFFF'];
+      const pieces = Array.from({ length: 110 }, () => ({
+        x: Math.random() * canvas.width,
+        y: Math.random() * -canvas.height,
+        w: 8 + Math.random() * 8,
+        h: 12 + Math.random() * 10,
+        color: colors[Math.floor(Math.random() * colors.length)],
+        vy: 2.5 + Math.random() * 4.5,
+        vx: (Math.random() - 0.5) * 3,
+        angle: Math.random() * Math.PI * 2,
+        vAngle: (Math.random() - 0.5) * 0.14
+      }));
+
+      const startTime = performance.now();
+
+      function frame(now) {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        pieces.forEach(p => {
+          p.x += p.vx;
+          p.y += p.vy;
+          p.angle += p.vAngle;
+          if (p.y > canvas.height + 20) {
+            p.y = -20;
+            p.x = Math.random() * canvas.width;
+          }
+          ctx.save();
+          ctx.translate(p.x, p.y);
+          ctx.rotate(p.angle);
+          ctx.fillStyle = p.color;
+          ctx.fillRect(-p.w / 2, -p.h / 2, p.w, p.h);
+          ctx.restore();
+        });
+
+        if (now - startTime < 4500 && state.phase === 'RESULTS') {
+          confettiAnimId = requestAnimationFrame(frame);
+        } else {
+          stopConfetti();
+        }
+      }
+
+      confettiAnimId = requestAnimationFrame(frame);
+    }
+
+    function stopConfetti() {
+      if (confettiAnimId) {
+        cancelAnimationFrame(confettiAnimId);
+        confettiAnimId = null;
+      }
+      els.confettiCanvas.classList.add('hidden');
+    }
+
+    // =========================================================================
+    // 10. 事件綁定（按鈕、左右螢幕觸控、電腦鍵盤上下鍵）
+    // =========================================================================
+    function initEvents() {
+      // 音效開關
+      els.soundToggleBtn.addEventListener('click', () => {
+        SoundFX.enabled = !SoundFX.enabled;
+        if (SoundFX.enabled) {
+          SoundFX.playClick();
+          els.soundIcon.textContent = '🔊';
+          els.soundLabel.textContent = '音效：開啟';
+        } else {
+          els.soundIcon.textContent = '🔇';
+          els.soundLabel.textContent = '音效：關閉';
+        }
+      });
+
+      // 玩法說明 Modal
+      els.openHelpBtn.addEventListener('click', () => {
+        SoundFX.playClick();
+        els.helpModal.classList.remove('hidden');
+        els.helpModal.classList.add('flex');
+      });
+      const closeHelp = () => {
+        SoundFX.playClick();
+        els.helpModal.classList.add('hidden');
+        els.helpModal.classList.remove('flex');
+      };
+      els.closeHelpBtn.addEventListener('click', closeHelp);
+      els.gotItHelpBtn.addEventListener('click', closeHelp);
+
+      // 每局時間選擇 (60s / 90s / 120s)
+      els.durationBtns.forEach(btn => {
+        btn.addEventListener('click', () => {
+          SoundFX.playClick();
+          state.selectedDuration = parseInt(btn.getAttribute('data-duration'), 10);
+          els.durationBtns.forEach(b => {
+            const active = parseInt(b.getAttribute('data-duration'), 10) === state.selectedDuration;
+            b.className = active
+              ? 'duration-btn btn-bouncy px-5 py-2.5 rounded-xl font-black text-sm md:text-base bg-yellow-400 text-slate-950 shadow-md'
+              : 'duration-btn btn-bouncy px-5 py-2.5 rounded-xl font-black text-sm md:text-base text-white hover:bg-white/15';
+          });
+        });
+      });
+
+      // 開始遊戲
+      els.startGameBtn.addEventListener('click', startPrepPhase);
+
+      // 準備階段返回與遊戲中結束
+      els.cancelPrepBtn.addEventListener('click', returnToHome);
+      els.quitPlayBtn.addEventListener('click', endGameAndShowResults);
+
+      // 直向提示遮罩「繼續遊玩」按鈕（方便桌面或直向測試）
+      els.dismissPortraitBtn.addEventListener('click', () => {
+        SoundFX.playClick();
+        state.dismissedPortraitWarning = true;
+        checkOrientationOverlay();
+      });
+
+      // 遊戲進行中：點擊螢幕左半邊＝估中、右半邊＝跳過（具備 0.8 秒防誤觸冷卻）
+      els.touchLeftPass.addEventListener('click', () => {
+        const now = performance.now();
+        if (now < state.cooldownUntil) return;
+        state.cooldownUntil = now + 800;
+        triggerWordAction('CORRECT');
+      });
+
+      els.touchRightCorrect.addEventListener('click', () => {
+        const now = performance.now();
+        if (now < state.cooldownUntil) return;
+        state.cooldownUntil = now + 800;
+        triggerWordAction('PASS');
+      });
+
+      // 電腦鍵盤備用支援（下鍵 / 右鍵 ＝ 估中，上鍵 / 左鍵 ＝ 跳過）
+      window.addEventListener('keydown', (e) => {
+        if (state.phase !== 'PLAYING' || state.isFeedbackShowing) return;
+        const now = performance.now();
+        if (now < state.cooldownUntil) return;
+
+        if (e.key === 'ArrowDown' || e.key === 'ArrowRight') {
+          e.preventDefault();
+          state.cooldownUntil = now + 800;
+          triggerWordAction('CORRECT');
+        } else if (e.key === 'ArrowUp' || e.key === 'ArrowLeft') {
+          e.preventDefault();
+          state.cooldownUntil = now + 800;
+          triggerWordAction('PASS');
+        }
+      });
+
+      // 結算畫面按鈕：再玩一局 / 更換題庫
+      els.playAgainBtn.addEventListener('click', () => {
+        stopConfetti();
+        startPrepPhase();
+      });
+      els.changeCategoryBtn.addEventListener('click', returnToHome);
+    }
+
+    // 啟動初始化
+    window.addEventListener('DOMContentLoaded', () => {
+      renderCategoryCards();
+      initEvents();
+    });
+  </script>
+</body>
+</html>
